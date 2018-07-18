@@ -8,16 +8,17 @@ import Reference from './Layout/Reference'
 
 const App = (props) => (
     <Layout>
-        <Reference name="example.1">
-            {block => block.append(
-                <div className="">Reference Appended Successfully</div>
-            )}
-        </Reference>
-
-        <div className="">
-            <Block name="example.1"
-        </div>
+        <Block name="app">
+            <div>qwer</div>
+        </Block>
         
+        <Reference.Append name="app">
+            <div className="">Reference Appended Successfully</div>
+        </Reference.Append>
+
+        {/*<div className="">
+            <Block name="example.1"
+        </div>*/}
     </Layout>
 )
 
