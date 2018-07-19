@@ -43,7 +43,7 @@ class Layout extends React.Component {
     }
 
     @apiMethod
-    createBlock(name, referenceCreator) {
+    createBlock(name, api) {
         const self = this
 
         
@@ -54,7 +54,6 @@ class Layout extends React.Component {
 
         const block = {
             name,
-            createReference: referenceCreator,
             destroy: () => {
                 this.setState((prevState) => {
                     if (prevState.data.blocks[name] !== block) {
@@ -70,8 +69,11 @@ class Layout extends React.Component {
                         }
                     }
                 })
-            }
+            },
+
+            ...api
         }
+
         this.setState((prevState) => ({
             data: {
                 blocks: {
@@ -87,16 +89,6 @@ class Layout extends React.Component {
     @apiMethod
     getBlock(name) {
         return this.state.data.blocks[name] || null
-    }
-
-    @apiMethod
-    createReference(name, id, callback, options = {}) {
-        const block = this.getBlock()
-        if (!block) {
-            return null
-        }
-
-        return block.createReference(id, callback, options)
     }
 }
 

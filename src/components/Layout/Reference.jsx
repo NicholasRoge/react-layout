@@ -14,60 +14,86 @@ class Reference extends React.Component {
             PropTypes.func
         ]),
 
-        before: PropTypes.string,
-        after: PropTypes.string
+        before: PropTypes.oneOfType([
+            PropTypes.string,
+            PropTypes.bool
+        ]),
+        after: PropTypes.oneOfType([
+            PropTypes.string,
+            PropTypes.bool
+        ])
     }
 
-    static getDerivedStateFromProps(props) {
+    static getDerivedStateFromProps(props, state) {
         return {
-            callback: props.children instanceof Function ? props.children : block => block.append(props.children),
-            id: props.id || uuidv4()
+            id: props.id || state.anonId,
+            callback: props.children instanceof Function ? props.children : block => block.append(props.children)
+        }
+    }
+
+    constructor() {
+        super(...arguments)
+
+        this.state = {
+            callback: null,
+            id: null,
+            anonId: uuidv4()
         }
     }
 
     render() {
-        const {
-            id,
-            children,
-            ...options
-        } = this.props
-
-        const {
-            block
-        } = this.state
-
-        if (block && children) {
-            block.renderReference(id, children, options)
-        }
-
         return (
             <div className="layout-reference">
-                <div>Reference: {this.props.name}</div>
+                <div>Reference '{this.state.id}' references '{this.props.name}'</div>
             </div>
         )
     }
 
-    componentWillUnmount() {
-        this.props.block.destroyReference()
-    }
-
-
-    onlyChildrenUpdated() {
-
-    }
-    
-    updateReference() {
+    renderReference() {
         const {
-            name,
-            layout,
+            block,
             children,
             ...options
         } = this.props
 
-        if (this.reference) {
-            this.reference.destroy()
+        if (!block || !children) {
+            return
         }
-        this.reference = layout.createReference(name, children, options)
+
+
+        block.renderReference(this.state.id, this.state.callback, options)
+    }
+
+
+    componentDidMount() {
+        console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  componentDidMount`)
+
+        this.renderReference()
+    }
+
+    componentDidUpdate(prevProps, prevState) {
+        console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  componentDidUpdate`)
+
+        if (prevProps.block) {
+            const propsOfInterest = new Set([...Object.keys(prevProps), ...Object.keys(this.props)])
+            propsOfInterest.delete('layout')
+            propsOfInterest.delete('children')
+            for (let propName of propsOfInterest) {
+                if (prevProps[propName] !== this.props[propName]) {
+                    prevProps.block.destroyReference(prevState.id)
+                }
+            }
+        }
+
+        this.renderReference()
+    }
+
+    componentWillUnmount() {
+        console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  componentWillUnmount`)
+
+        if (this.props.block) {
+            this.props.block.destroyReference(this.state.id)
+        }
     }
 }
 
@@ -87,6 +113,12 @@ export const Append = ({children, ...props}) => (
 export const Prepend = ({children, ...props}) => (
     <ReferenceContainer {...props}>
         {block => block.prepend(children)}
+    </ReferenceContainer>
+)
+
+export const Decorate = ({children, ...props}) => (
+    <ReferenceContainer {...props}>
+        {block => block.decorate(children)}
     </ReferenceContainer>
 )
 
