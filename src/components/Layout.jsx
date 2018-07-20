@@ -74,14 +74,19 @@ class Layout extends React.Component {
             ...api
         }
 
-        this.setState((prevState) => ({
-            data: {
-                blocks: {
-                    ...prevState.blocks,
-                    [name]: block
+        this.setState((prevState) => {
+            const nextState = {
+                data: {
+                    ...prevState.data,
+                    blocks: {
+                        ...prevState.data.blocks,
+                        [name]: block
+                    }
                 }
             }
-        }))
+            
+            return nextState
+        })
 
         return block
     }

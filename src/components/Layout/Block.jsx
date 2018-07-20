@@ -5,6 +5,9 @@ import Layout from '../Layout'
 import { isDeepStrictEqual } from 'util';
 
 
+export const parentBlockContext = React.createContext([])
+
+
 const apiMethod = (target, name, descriptor) => {
     if (typeof descriptor.value === 'function') {
         const apiMethodNames = target.apiMethodNames || []
@@ -14,7 +17,6 @@ const apiMethod = (target, name, descriptor) => {
 
     return descriptor
 }
-
 
 class Something {
     _updates = {
@@ -101,22 +103,29 @@ class Block extends React.Component {
             children
         } = this.props
 
-        //console.log([...(this.renderedReferences || [])])
-        this.renderedReferences = new Set()
-        //console.log(this.state.updates.decorators.all)
 
-        return this.renderDecorated(
-            <div className="layout-block" data-name={name}>
-                <div>Block: {name}</div>
+        console.info(`Block[name="${this.props.name}"]:  render`)
 
-                <main>
-                    {this.renderPrepends()}
-                    <Renderer {...rendererProps}>
-                        {children}
-                    </Renderer>
-                    {this.renderAppends()}
-                </main>
-            </div>
+        return (
+            <parentBlockContext.Consumer>
+                {parentBlocks => (
+                    <parentBlockContext.Provider value={[...parentBlocks, name]}>
+                        {this.renderDecorated(
+                            <div className="layout-block" data-name={name}>
+                                <div>Block: {name}</div>
+
+                                <main>
+                                    {this.renderPrepends()}
+                                    <Renderer {...rendererProps}>
+                                        {children}
+                                    </Renderer>
+                                    {this.renderAppends()}
+                                </main>
+                            </div>
+                        )}
+                    </parentBlockContext.Provider>
+                )}
+            </parentBlockContext.Consumer>
         )
     }
 
@@ -129,8 +138,12 @@ class Block extends React.Component {
     }
 
     renderDecorated(base) {
-        return this.renderUpdates('decorators')
+        const decorators = this.renderUpdates('decorators')
+
+        const foo = decorators
             .reduce((prev, decorator) => decorator(prev), base)
+
+        return foo
     }
 
 
@@ -167,7 +180,7 @@ class Block extends React.Component {
 
 
     componentDidMount() {
-        console.log(`Block[name="${this.props.name}"]:  componentDidMount`)
+        console.info(`Block[name="${this.props.name}"]:  componentDidMount`)
 
         this.setState({
             block: this.props.layout.createBlock(this.props.name, this.apiMethods)
@@ -175,7 +188,7 @@ class Block extends React.Component {
     }
 
     componentDidUpdate(prevProps) {
-        console.log(`Block[name="${this.props.name}"]:  componentDidUpdate`)
+        console.info(`Block[name="${this.props.name}"]:  componentDidUpdate`)
 
         if (this.props.name !== prevProps.name) {
             this.state.block.destroy()
@@ -186,7 +199,7 @@ class Block extends React.Component {
     }
 
     componentWillUnmount() {
-        console.log(`Block[name="${this.props.name}"]:  componentWillUnmount`)
+        console.info(`Block[name="${this.props.name}"]:  componentWillUnmount`)
 
         if (this.state.block) {
             this.state.block.destroy()
@@ -196,91 +209,82 @@ class Block extends React.Component {
 
     @apiMethod
     renderReference(id, callback, options) {
-        const something = new Something()
-        callback(something)
+        this.setState(prevState => {
+            const something = new Something()
+            callback(something)
 
-        for (const type in this.state.updates) {
-            const typeUpdates = {...this.state.updates[type]}
+            const nextState = {...prevState}
+            for (const type in prevState.updates) {
+                const typeUpdates = {...prevState.updates[type]}
 
-            if (typeUpdates.all[id]) {
-                typeUpdates.all[id].content = something.getUpdates(type)
-            } else {
-                typeUpdates.all[id] = {
-                    before: [],
-                    content: something.getUpdates(type),
-                    after: [],
-
-                    position: null
-                }
-            }
-
-            if (options.before) {
-                if (options.before === true || options.before === '-') {
-                    typeUpdates.all[id].position = ['before', null]
-
-                    typeUpdates.before.push(...something[type])
+                if (typeUpdates.all[id]) {
+                    typeUpdates.all[id].content = something.getUpdates(type)
                 } else {
-                    typeUpdates.all[id].position = ['before', options.before]
-                    if (typeUpdates.all[options.before]) {
-                        if (!typeUpdates.all[options.before].before.includes(id)) {
-                            typeUpdates.all[options.before].before.push(id)
-                        }
-                    } else {
-                        typeUpdates.all[options.before] = {
-                            before: [id],
-                            content: [],
-                            after: [],
-                            
-                            position: null
-                        }
+                    typeUpdates.all[id] = {
+                        before: [],
+                        content: something.getUpdates(type),
+                        after: [],
+
+                        position: null
                     }
                 }
-            } else if (options.after) {
-                if (options.after === true || options.after === '-') {
-                    typeUpdates.all[id].position = ['after', null]
 
-                    typeUpdates.after.push(id)
-                } else {
-                    typeUpdates.all[id].position = ['after', options.after]
+                if (options.before) {
+                    if (options.before === true || options.before === '-') {
+                        typeUpdates.all[id].position = ['before', null]
 
-                    if (typeUpdates.all[options.after]) {
-                        if (!typeUpdates.all[options.after].after.includes(id)) {
-                            typeUpdates.all[options.after].after.push(id)
-                        }
+                        typeUpdates.before.push(...something[type])
                     } else {
-                        typeUpdates.all[options.after] = {
-                            before: [],
-                            content: [],
-                            after: [id],
-
-                            position: null
+                        typeUpdates.all[id].position = ['before', options.before]
+                        if (typeUpdates.all[options.before]) {
+                            if (!typeUpdates.all[options.before].before.includes(id)) {
+                                typeUpdates.all[options.before].before.push(id)
+                            }
+                        } else {
+                            typeUpdates.all[options.before] = {
+                                before: [id],
+                                content: [],
+                                after: [],
+                                
+                                position: null
+                            }
                         }
                     }
-                }
-            } else {
-                if (!typeUpdates.content.includes(id)) {
-                    typeUpdates.content.push(id)
+                } else if (options.after) {
+                    if (options.after === true || options.after === '-') {
+                        typeUpdates.all[id].position = ['after', null]
+
+                        typeUpdates.after.push(id)
+                    } else {
+                        typeUpdates.all[id].position = ['after', options.after]
+
+                        if (typeUpdates.all[options.after]) {
+                            if (!typeUpdates.all[options.after].after.includes(id)) {
+                                typeUpdates.all[options.after].after.push(id)
+                            }
+                        } else {
+                            typeUpdates.all[options.after] = {
+                                before: [],
+                                content: [],
+                                after: [id],
+
+                                position: null
+                            }
+                        }
+                    }
+                } else {
+                    if (!typeUpdates.content.includes(id)) {
+                        typeUpdates.content.push(id)
+                    }
                 }
             }
-
-            this.setState(() => ({
-                updates: {
-                    ...this.state.updates,
-                    [type]: typeUpdates
-                }
-            }))
-        }
-
-        this.renderedReferences.add("+" + id + "(" + this.renderedReferences.size + ")")
-
-        return 
+            return nextState
+        })
     }
 
-    @apiMethod
+    @apiMethod    
     destroyReference(id) {
         this.setState((prevState) => {
-            this.renderedReferences.add("-" + id + "(" + this.renderedReferences.size + ")")
-
             const updates = {...prevState.updates}
             for (const type in updates) {
                 const referenceUpdates = updates[type].all[id]

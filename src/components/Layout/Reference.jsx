@@ -3,7 +3,11 @@ import React from 'react'
 import uuidv4 from 'uuid/v4'
 
 import Layout from '../Layout'
+import {parentBlockContext} from './Block.jsx'
 
+
+
+const recursiveDecoratorContext = React.createContext({})
 
 class Reference extends React.Component {
     static propTypes = {
@@ -24,12 +28,18 @@ class Reference extends React.Component {
         ])
     }
 
+    static defaultProps = {
+        recursivelyDecorated: false
+    }
+
     static getDerivedStateFromProps(props, state) {
         return {
             id: props.id || state.anonId,
             callback: props.children instanceof Function ? props.children : block => block.append(props.children)
         }
     }
+
+    _recursivelyDecorated = false
 
     constructor() {
         super(...arguments)
@@ -42,6 +52,8 @@ class Reference extends React.Component {
     }
 
     render() {
+        console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  render`)
+
         return (
             <div className="layout-reference">
                 <div>Reference '{this.state.id}' references '{this.props.name}'</div>
@@ -51,8 +63,10 @@ class Reference extends React.Component {
 
     renderReference() {
         const {
+            name,
             block,
             children,
+            parentBlocks,
             ...options
         } = this.props
 
@@ -60,47 +74,114 @@ class Reference extends React.Component {
             return
         }
 
+        console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  renderReference`)
 
-        block.renderReference(this.state.id, this.state.callback, options)
+
+        let baseCallback
+        if (children instanceof Function) {
+            baseCallback = children
+        } else {
+            baseCallback = block => block.append(children)
+        }
+
+        let recursionDetectingCallback = baseCallback
+        if (parentBlocks.includes(name)) {
+            recursionDetectingCallback = block => {
+                ((oldFn) => {
+                    block.decorate = (decorator) => {
+                        if (!this.props.id) {
+                            throw new Error("References that decorate a block in the parent context MUST have an ID to prevent recursion.")
+                        }
+
+                        if (!this._recursivelyDecorated) {
+                            oldFn.apply(block, [prev => (
+                                <recursiveDecoratorContext.Consumer>
+                                    {recursiveDecorators => {
+                                        const nextRecursiveDecorators = {...recursiveDecorators}
+                                        nextRecursiveDecorators[name] = [
+                                            ...(nextRecursiveDecorators[name] || []),
+                                            this.props.id
+                                        ]
+
+                                        return (
+                                            <recursiveDecoratorContext.Provider value={nextRecursiveDecorators}>
+                                                {prev}
+                                            </recursiveDecoratorContext.Provider>
+                                        )
+                                    }}
+                                </recursiveDecoratorContext.Consumer>
+                            )])
+
+                            this._recursivelyDecorated = true
+                        }
+
+                        oldFn.apply(block, [decorator])
+                    }
+                })(block.decorate)
+
+                baseCallback(block)
+            }
+        }
+
+        block.renderReference(this.state.id, recursionDetectingCallback, options)
     }
 
 
     componentDidMount() {
         console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  componentDidMount`)
 
-        this.renderReference()
+        if (!this.props.recursivelyDecorated) {
+            this.renderReference()
+        }
     }
 
     componentDidUpdate(prevProps, prevState) {
         console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  componentDidUpdate`)
 
-        if (prevProps.block) {
-            const propsOfInterest = new Set([...Object.keys(prevProps), ...Object.keys(this.props)])
-            propsOfInterest.delete('layout')
-            propsOfInterest.delete('children')
-            for (let propName of propsOfInterest) {
-                if (prevProps[propName] !== this.props[propName]) {
-                    prevProps.block.destroyReference(prevState.id)
+        if (!this._recursivelyDecorated) {
+            if (prevProps.block) {
+                const propsOfInterest = new Set([...Object.keys(prevProps), ...Object.keys(this.props)])
+                propsOfInterest.delete('layout')
+                propsOfInterest.delete('children')
+                for (let propName of propsOfInterest) {
+                    if (prevProps[propName] !== this.props[propName]) {
+                        prevProps.block.destroyReference(prevState.id)
+                    }
                 }
             }
-        }
 
-        this.renderReference()
+            this.renderReference()
+        }
     }
 
     componentWillUnmount() {
         console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  componentWillUnmount`)
 
-        if (this.props.block) {
+        if (this.props.block && !this._recursivelyDecorated) {
+            console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  destroyReference`)
             this.props.block.destroyReference(this.state.id)
         }
     }
 }
 
 const ReferenceContainer = (props) => (
-    <Layout.Consumer>
-        {layout => <Reference {...props} block={layout.getBlock(props.name)} />}
-    </Layout.Consumer>
+    <recursiveDecoratorContext.Consumer>
+        {recursiveDecorators => (
+            <parentBlockContext.Consumer>
+                {parentBlocks => (
+                    <Layout.Consumer>
+                        {layout => (
+                                <Reference 
+                                    {...props} 
+                                    block={layout.getBlock(props.name)} 
+                                    parentBlocks={parentBlocks} 
+                                    recursivelyDecorated={recursiveDecorators[props.name] && recursiveDecorators[props.name].includes(props.id)} />
+                        )}
+                    </Layout.Consumer>
+                )}
+            </parentBlockContext.Consumer>
+        )}
+    </recursiveDecoratorContext.Consumer>
 )
 
 
