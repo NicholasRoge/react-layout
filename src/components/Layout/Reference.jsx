@@ -9,12 +9,12 @@ import {parentBlockContext} from './Block.jsx'
 
 const recursiveDecoratorContext = React.createContext({})
 
-class Reference extends React.Component {
+class Reference extends React.PureComponent {
     static propTypes = {
         name: PropTypes.string,
         id: PropTypes.string,
         children: PropTypes.oneOfType([
-            PropTypes.element,
+            PropTypes.node,
             PropTypes.func
         ]),
 
@@ -34,8 +34,7 @@ class Reference extends React.Component {
 
     static getDerivedStateFromProps(props, state) {
         return {
-            id: props.id || state.anonId,
-            callback: props.children instanceof Function ? props.children : block => block.append(props.children)
+            id: props.id || state.anonId
         }
     }
 
@@ -45,7 +44,6 @@ class Reference extends React.Component {
         super(...arguments)
 
         this.state = {
-            callback: null,
             id: null,
             anonId: uuidv4()
         }
@@ -127,6 +125,16 @@ class Reference extends React.Component {
     }
 
 
+    /*shouldComponentUpdate(nextProps, nextState) {
+        return !(
+            [...(new Set([...Object.keys(this.props), ...Object.keys(nextProps)]))]
+                .reduce((prev, key) => prev && this.props[key] === nextProps[key], true)
+            &&
+            [...(new Set([...Object.keys(this.state), ...Object.keys(nextState)]))]
+                .reduce((prev, key) => prev && this.state[key] === nextState[key], true)
+        )
+    }*/
+
     componentDidMount() {
         console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  componentDidMount`)
 
@@ -137,7 +145,6 @@ class Reference extends React.Component {
 
     componentDidUpdate(prevProps, prevState) {
         console.info(`Reference[name="${this.props.name}", id="${this.state.id}"]:  componentDidUpdate`)
-
         if (!this._recursivelyDecorated) {
             if (prevProps.block) {
                 const propsOfInterest = new Set([...Object.keys(prevProps), ...Object.keys(this.props)])

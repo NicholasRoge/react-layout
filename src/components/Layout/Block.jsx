@@ -54,7 +54,7 @@ class Block extends React.Component {
     }
 
     static defaultProps = {
-        renderer: ({children}) => children,
+        renderer: ({children}) => children || null,
         rendererProps: {},
         references: []
     }
